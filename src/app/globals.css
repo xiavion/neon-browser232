@@ -2,151 +2,456 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Çok daha belirgin renk ve stillerle ekleyelim */
 :root {
-  --background: 0 0% 3%;
-  --foreground: 270 100% 98%;
+  --background: 0 0% 5%;
+  --foreground: 210 40% 98%;
 
-  --card: 0 0% 5%;
-  --card-foreground: 270 100% 98%;
+  --card: 0 0% 8%;
+  --card-foreground: 210 40% 98%;
 
-  --popover: 0 0% 5%;
-  --popover-foreground: 270 100% 98%;
+  --popover: 0 0% 8%;
+  --popover-foreground: 210 40% 98%;
 
-  --primary: 285 100% 60%;
-  --primary-foreground: 270 100% 98%;
+  --primary: 270 100% 60%;
+  --primary-foreground: 210 40% 98%;
 
-  --secondary: 190 100% 50%;
-  --secondary-foreground: 270 100% 98%;
+  --secondary: 180 100% 50%;
+  --secondary-foreground: 210 40% 98%;
 
-  --accent: 320 100% 60%;
-  --accent-foreground: 270 100% 98%;
+  --accent: 120 100% 50%;
+  --accent-foreground: 210 40% 98%;
 
-  --muted: 0 0% 15%;
-  --muted-foreground: 240 5% 65%;
+  --muted: 0 0% 12%;
+  --muted-foreground: 215 20% 65%;
 
   --destructive: 0 100% 50%;
-  --destructive-foreground: 270 100% 98%;
+  --destructive-foreground: 210 40% 98%;
 
-  --success: 142 71% 45%;
-  --success-foreground: 270 100% 98%;
+  --border: 0 0% 15%;
+  --input: 0 0% 15%;
+  --ring: 270 100% 60%;
 
-  --border: 240 5% 26%;
-  --input: 240 5% 26%;
-  --ring: 240 5% 70%;
-
-  --radius: 0.75rem;
+  --radius: 0.5rem;
 }
 
-/* Güçlü doğrudan stillerle başlayalım */
-html {
-  background-color: #050505 !important;
+/* Temel stil sıfırlama ve ayarlar */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-body {
-  background-color: #050505 !important;
-  color: #f2f2ff !important;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif !important;
+html, body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background-color: #0c0c0c;
+  color: #f0f0f0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-/* Neon başlık */
+/* Tarayıcı ana container */
+.browser-window {
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background-color: #0c0c0c;
+  border: 2px solid #8a2be2;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 0 20px rgba(138, 43, 226, 0.5),
+              inset 0 0 10px rgba(138, 43, 226, 0.3);
+}
+
+/* Başlık çubuğu */
+.title-bar {
+  height: 28px;
+  background-color: #0c0c0c;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  border-bottom: 1px solid #333;
+  user-select: none;
+}
+
+.window-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.control-btn {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+}
+
+.close-btn {
+  background-color: #ff5f57;
+}
+
+.minimize-btn {
+  background-color: #ffbd2e;
+}
+
+.maximize-btn {
+  background-color: #28c941;
+}
+
+.window-title {
+  color: #8a2be2;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(138, 43, 226, 0.8);
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Ana içerik alanı */
+.browser-content {
+  display: flex;
+  flex: 1;
+  position: relative;
+}
+
+/* Sol kenar çubuğu */
+.sidebar {
+  width: 60px;
+  background-color: #0c0c0c;
+  border-right: 1px solid #222;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 10px;
+}
+
+.sidebar-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+  background-color: transparent;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sidebar-btn:hover {
+  background-color: rgba(138, 43, 226, 0.2);
+  color: #fff;
+}
+
+.sidebar-spacer {
+  flex: 1;
+}
+
+/* Ana tarayıcı alanı */
+.main-browser {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Sekme çubuğu */
+.tabs-bar {
+  height: 36px;
+  background-color: #0c0c0c;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #222;
+  padding: 0 5px;
+}
+
+.tab {
+  height: 36px;
+  padding: 0 15px;
+  display: flex;
+  align-items: center;
+  background-color: #111;
+  border-right: 1px solid #222;
+  font-size: 13px;
+  color: #bbb;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+  min-width: 120px;
+  max-width: 180px;
+}
+
+.tab.active {
+  background-color: #181818;
+  color: #fff;
+}
+
+.tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, #8a2be2, #2e8ab2);
+}
+
+.tab-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-close {
+  margin-left: 8px;
+  opacity: 0.6;
+  transition: all 0.2s ease;
+}
+
+.tab-close:hover {
+  opacity: 1;
+}
+
+.new-tab-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background-color: transparent;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.new-tab-btn:hover {
+  color: #fff;
+  background-color: #222;
+}
+
+/* Adres çubuğu */
+.address-bar {
+  height: 48px;
+  background-color: #0c0c0c;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-bottom: 1px solid #222;
+}
+
+.nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: 10px;
+}
+
+.nav-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: transparent;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.nav-btn:hover {
+  background-color: #222;
+  color: #fff;
+}
+
+.nav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.url-container {
+  flex: 1;
+  height: 36px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  background-color: #181818;
+  border-radius: 18px;
+  border: 1px solid #333;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.url-container:focus-within {
+  border-color: #8a2be2;
+  box-shadow: 0 0 0 2px rgba(138, 43, 226, 0.25);
+}
+
+.url-icon {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8a2be2;
+  font-size: 18px;
+}
+
+.url-input {
+  flex: 1;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 14px;
+  padding: 0 10px;
+  outline: none;
+}
+
+.browser-actions {
+  display: flex;
+  align-items: center;
+  margin-left: 10px;
+  gap: 5px;
+}
+
+.action-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: transparent;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+  background-color: #222;
+  color: #fff;
+}
+
+.bookmark-btn {
+  background-color: #8a2be2;
+  color: #fff;
+}
+
+/* İçerik alanı */
+.webpage-content {
+  flex: 1;
+  background-color: #121212;
+  position: relative;
+  overflow: hidden;
+}
+
+.browser-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* Arayüz öğeleri için neon efektleri */
 .neon-text {
-  color: #ff00ff !important;
-  text-shadow: 0 0 5px #ff00ff, 0 0 10px #ff00ff, 0 0 15px #ff00ff !important;
-  font-weight: bold !important;
+  color: #8a2be2;
+  text-shadow: 0 0 10px rgba(138, 43, 226, 0.8);
 }
 
-/* Butonlar */
-button {
-  background-color: #333 !important;
-  color: #fff !important;
-  border-radius: 4px !important;
-  border: 1px solid #444 !important;
+.neon-box {
+  border: 1px solid #8a2be2;
+  box-shadow: 0 0 10px rgba(138, 43, 226, 0.5), inset 0 0 5px rgba(138, 43, 226, 0.2);
 }
 
-button:hover {
-  background-color: #444 !important;
-  box-shadow: 0 0 10px rgba(255, 0, 255, 0.7) !important;
+.neon-btn {
+  background-color: transparent;
+  border: 1px solid #8a2be2;
+  color: #8a2be2;
+  box-shadow: 0 0 10px rgba(138, 43, 226, 0.3);
+  transition: all 0.3s ease;
 }
 
-/* Giriş kutusu */
-input {
-  background-color: #222 !important;
-  color: #fff !important;
-  border: 1px solid #444 !important;
-  border-radius: 4px !important;
+.neon-btn:hover {
+  background-color: #8a2be2;
+  color: #fff;
+  box-shadow: 0 0 15px rgba(138, 43, 226, 0.6);
 }
 
-/* Sekme kutusu */
-.bg-card {
-  background-color: #111 !important;
+/* Demo sayfası içeriği */
+.demo-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background-color: #121212;
+  color: #f0f0f0;
+  text-align: center;
+  padding: 20px;
 }
 
-/* Bileşen sınıfları */
-@layer components {
-  .neon-border {
-    position: relative !important;
-    border-radius: 0.5rem !important;
-    overflow: hidden !important;
-  }
-
-  .neon-border::before {
-    content: '' !important;
-    position: absolute !important;
-    inset: 0 !important;
-    border-radius: 0.5rem !important;
-    background: linear-gradient(90deg,
-      rgba(255, 0, 255, 0.8),
-      rgba(0, 255, 255, 0.8),
-      rgba(255, 0, 255, 0.8)) !important;
-    background-size: 200% 200% !important;
-    animation: neon-glow 3s linear infinite !important;
-    z-index: -1 !important;
-    filter: blur(8px) !important;
-  }
-
-  .neon-border::after {
-    content: '' !important;
-    position: absolute !important;
-    inset: 1px !important;
-    background-color: #050505 !important;
-    border-radius: 0.5rem !important;
-    z-index: -1 !important;
-  }
-
-  .neon-glow {
-    text-shadow: 0 0 5px #ff00ff, 0 0 10px #ff00ff, 0 0 15px #ff00ff !important;
-  }
-
-  .neon-tab {
-    position: relative !important;
-    overflow: hidden !important;
-    border-radius: 0.5rem !important;
-    transition: all 0.3s !important;
-  }
-
-  .neon-tab.active::before {
-    content: '' !important;
-    position: absolute !important;
-    inset: 0 !important;
-    border-radius: 0.5rem !important;
-    background: linear-gradient(90deg,
-      rgba(255, 0, 255, 0.8),
-      rgba(0, 255, 255, 0.8),
-      rgba(255, 0, 255, 0.8)) !important;
-    z-index: -1 !important;
-    filter: blur(4px) !important;
-  }
+.demo-logo {
+  font-size: 32px;
+  margin-bottom: 40px;
+  letter-spacing: 1px;
 }
 
-@keyframes neon-glow {
+.demo-text {
+  max-width: 600px;
+  margin-bottom: 20px;
+  line-height: 1.6;
+  color: #aaa;
+}
+
+.demo-highlight {
+  color: #2bd8d0;
+  text-shadow: 0 0 10px rgba(43, 216, 208, 0.8);
+  margin: 20px 0;
+}
+
+.demo-btn {
+  padding: 10px 20px;
+  background-color: transparent;
+  color: #2bd8d0;
+  border: 1px solid #2bd8d0;
+  border-radius: 4px;
+  font-size: 16px;
+  margin-top: 30px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 10px rgba(43, 216, 208, 0.3);
+}
+
+.demo-btn:hover {
+  background-color: #2bd8d0;
+  color: #000;
+  box-shadow: 0 0 15px rgba(43, 216, 208, 0.6);
+}
+
+/* Animasyonlar */
+@keyframes glow {
   0% {
-    background-position: 0% 50%;
+    box-shadow: 0 0 10px rgba(138, 43, 226, 0.5);
   }
   50% {
-    background-position: 100% 50%;
+    box-shadow: 0 0 20px rgba(138, 43, 226, 0.8);
   }
   100% {
-    background-position: 0% 50%;
+    box-shadow: 0 0 10px rgba(138, 43, 226, 0.5);
   }
 }
