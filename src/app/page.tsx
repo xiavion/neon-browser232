@@ -332,6 +332,7 @@ export default function Browser() {
                   size="icon"
                   className="h-5 w-5 ml-1 opacity-70 hover:opacity-100"
                   onClick={(e) => handleCloseTab(tab.id, e)}
+                  forwardedAs="span"
                 >
                   <X className="h-3 w-3" />
                 </Button>
