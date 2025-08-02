@@ -70,6 +70,7 @@ interface ElectronAPI {
 declare global {
   interface Window {
     electronAPI?: ElectronAPI;
+    globalActiveTabId?: string;
   }
 }
 
@@ -203,15 +204,7 @@ export default function Browser() {
     return () => {
       electronAPI.removeAllListeners();
     };
-  }, []);
-
-  // İlk yüklemede ilk sekmeyi oluştur
-  useEffect(() => {
-    if (!electronAPI) return;
-
-    // İlk sekmeyi oluştur - GX Speed Dial sayfası
-    electronAPI.createTab("1", "gx://speed");
-  }, [electronAPI]);
+  }, [electronAPI, activeTab]); // activeTab bağımlılığını ekle
 
   // Sekme değiştiğinde
   useEffect(() => {
@@ -225,7 +218,35 @@ export default function Browser() {
     if (currentTab) {
       setUrl(currentTab.url);
     }
-  }, [activeTab, electronAPI]);
+
+    // Aktif sekme ID'sini global değişkene aktar (preload.js için)
+    if (typeof window !== 'undefined') {
+      // TypeScript hatası için Window tipini genişletiyoruz
+      (window as Window & { globalActiveTabId?: string }).globalActiveTabId = activeTab;
+    }
+  }, [activeTab, electronAPI, tabs]); // tabs bağımlılığını ekle
+
+  // Elektronun varlığını kontrol et - Geliştirme ortamında ekstra kontrol
+  useEffect(() => {
+    // Electron API varlığını kontrol et
+    const checkElectron = () => {
+      const isElectronEnv = !!(window.electronAPI);
+      console.log("Electron ortamı algılandı:", isElectronEnv);
+      setIsElectron(isElectronEnv);
+
+      if (isElectronEnv) {
+        // İlk sekmeyi oluştur - GX Speed Dial sayfası
+        electronAPI?.createTab("1", "gx://speed");
+      }
+    };
+
+    checkElectron();
+
+    // Eğer API hemen yüklenmediyse, biraz bekleyip tekrar dene
+    const timer = setTimeout(checkElectron, 1000);
+
+    return () => clearTimeout(timer);
+  }, [electronAPI]);
 
   // İçerik alanı boyutu değiştiğinde
   useEffect(() => {
@@ -580,12 +601,12 @@ export default function Browser() {
     <div className="browser-window">
       {/* Başlık çubuğu */}
       <div className="title-bar">
+        <div className="window-title">Xiavion Browser</div>
         <div className="window-controls">
-          <button className="control-btn close-btn" onClick={handleClose}></button>
           <button className="control-btn minimize-btn" onClick={handleMinimize}></button>
           <button className="control-btn maximize-btn" onClick={handleMaximize}></button>
+          <button className="control-btn close-btn" onClick={handleClose}></button>
         </div>
-        <div className="window-title">Xiavion Browser</div>
       </div>
 
       {/* Ana içerik */}
@@ -715,14 +736,6 @@ export default function Browser() {
 
           {/* Tarayıcı içeriği */}
           <div className="webpage-content" ref={contentRef}>
-            {!isElectron && (
-              <div className="demo-content">
-                <h1 className="demo-logo neon-text">Xiavion Browser</h1>
-                <p className="demo-text">Gerçek Chromium tabanlı tarayıcı moduna hoş geldiniz.</p>
-                <p className="demo-highlight">Bu alanda Chromium BrowserView ile web siteleri gösterilecektir.</p>
-                <button className="demo-btn">Xiavion Browser</button>
-              </div>
-            )}
             {/* BrowserView buraya yerleştirilecek */}
           </div>
 

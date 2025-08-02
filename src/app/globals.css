@@ -74,7 +74,7 @@ html, body {
 
 /* Başlık çubuğu */
 .title-bar {
-  height: 28px;
+  height: 32px;
   background-color: #0c0c0c;
   display: flex;
   align-items: center;
@@ -85,6 +85,15 @@ html, body {
   -webkit-app-region: drag;
 }
 
+.window-title {
+  color: var(--gx-primary);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-shadow: var(--gx-neon-glow);
+}
+
 .window-controls {
   display: flex;
   align-items: center;
@@ -93,12 +102,21 @@ html, body {
 }
 
 .control-btn {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   border: none;
   cursor: pointer;
   -webkit-app-region: no-drag;
+  transition: transform 0.1s;
+}
+
+.control-btn:hover {
+  transform: scale(1.1);
+}
+
+.control-btn:active {
+  transform: scale(0.95);
 }
 
 .close-btn {
@@ -111,18 +129,6 @@ html, body {
 
 .maximize-btn {
   background-color: #28c941;
-}
-
-.window-title {
-  color: var(--gx-primary);
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  text-shadow: var(--gx-neon-glow);
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
 }
 
 /* Ana içerik alanı */
@@ -767,5 +773,17 @@ input:checked + .toggle-slider:before {
   .tab {
     min-width: 100px;
     max-width: 140px;
+  }
+
+  .window-title {
+    font-size: 13px;
+  }
+  .window-controls {
+    right: 6px;
+    gap: 7px;
+  }
+  .control-btn {
+    width: 11px;
+    height: 11px;
   }
 }

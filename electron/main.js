@@ -22,31 +22,27 @@ const RESOURCE_MONITOR_INTERVAL = 2000;
 let resourceMonitorInterval = null;
 
 function createWindow() {
-  // Tarayıcı penceresini oluştur
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 800,
     minHeight: 600,
-    backgroundColor: '#030303', // Koyu arka plan
+    backgroundColor: '#030303',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
     },
-    frame: false, // Çerçevesiz pencere
-    titleBarStyle: 'hidden', // Gizli başlık çubuğu
-    icon: path.join(__dirname, '../public/icon.png') // Uygulama ikonu
+    frame: false,
+    titleBarStyle: 'hidden',
+    icon: path.join(__dirname, '../public/icon.png')
   });
 
-  // Geliştirme modunda Next.js dev sunucusunu yükle
   if (isDev) {
     console.log('Development modunda çalışıyor, localhost:3000 kullanılıyor');
     mainWindow.loadURL('http://localhost:3000');
-    // Dev araçlarını aç
     // mainWindow.webContents.openDevTools();
   } else {
-    // Dağıtım için build edilmiş Next.js uygulamasını yükle
     const outPath = path.join(__dirname, '../out/index.html');
     console.log(`Production modunda çalışıyor, dosya yükleniyor: ${outPath}`);
 
@@ -58,49 +54,40 @@ function createWindow() {
     }
   }
 
-  // İçerik alanının boyutunu ayarlamak için
   mainWindow.on('resize', () => {
     if (activeViewId && views[activeViewId]) {
       resizeActiveView();
     }
   });
 
-  // Pencere kapandığında olayı yakala
   mainWindow.on('closed', () => {
     mainWindow = null;
     views = {};
 
-    // Kaynak izleyiciyi temizle
     if (resourceMonitorInterval) {
       clearInterval(resourceMonitorInterval);
       resourceMonitorInterval = null;
     }
   });
 
-  // Sistem kaynak izleyiciyi başlat
   startResourceMonitoring();
 }
 
-// Sistem kaynaklarını izlemeye başla
 function startResourceMonitoring() {
   if (resourceMonitorInterval) {
     clearInterval(resourceMonitorInterval);
   }
 
   resourceMonitorInterval = setInterval(() => {
-    // CPU kullanımını al
     getCPUUsage().then(cpuUsage => {
-      // RAM kullanımını al
       const memoryInfo = process.getProcessMemoryInfo();
       const totalMem = os.totalmem();
       const freeMem = os.freemem();
       const usedMem = totalMem - freeMem;
       const memoryUsage = Math.round((usedMem / totalMem) * 100);
 
-      // Ağ kullanımını al (daha karmaşık, basitleştirilmiş)
-      const networkUsage = 50; // Şimdilik sabit bir değer, gerçek değer için özel modül gerekir
+      const networkUsage = 50;
 
-      // Sonuçları ana pencereye gönder
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('system-resources-updated', {
           cpu: cpuUsage,
@@ -109,7 +96,6 @@ function startResourceMonitoring() {
         });
       }
 
-      // Eğer kaynak sınırlama etkinse, tarayıcı davranışını ayarla
       if (resourceLimits.isLimiterEnabled) {
         applyResourceLimits();
       }
@@ -117,7 +103,6 @@ function startResourceMonitoring() {
   }, RESOURCE_MONITOR_INTERVAL);
 }
 
-// CPU kullanımını almak için yardımcı fonksiyon
 async function getCPUUsage() {
   return new Promise((resolve) => {
     const startUsage = process.cpuUsage();
@@ -125,18 +110,14 @@ async function getCPUUsage() {
     setTimeout(() => {
       const endUsage = process.cpuUsage(startUsage);
       const totalUsage = endUsage.user + endUsage.system;
-      // 500ms içindeki CPU kullanımını yüzde olarak hesapla
       const cpuPercent = Math.round((totalUsage / (500 * 1000)) * 100);
-      resolve(Math.min(cpuPercent, 100)); // Max %100
+      resolve(Math.min(cpuPercent, 100));
     }, 500);
   });
 }
 
-// Kaynak sınırlamalarını uygula
 function applyResourceLimits() {
-  // CPU sınırlaması - yoğun işlemleri kısıtlama
   if (resourceLimits.cpuLimit < 100) {
-    // Aktif olmayan sekmelerin throttle edilmesi
     Object.keys(views).forEach(id => {
       if (id !== activeViewId) {
         views[id].webContents.setBackgroundThrottling(true);
@@ -144,46 +125,97 @@ function applyResourceLimits() {
     });
   }
 
-  // RAM sınırlaması - önbellek boyutunu sınırla
   if (resourceLimits.ramLimit < 100) {
     const cacheSizeInMB = Math.max(50, Math.round(500 * (resourceLimits.ramLimit / 100)));
     session.defaultSession.setCacheSize(cacheSizeInMB * 1024 * 1024);
   }
 
-  // Ağ sınırlaması - indirme hızını sınırla
   if (resourceLimits.networkLimit < 100) {
     // Ağ sınırlaması için özel uygulama gerekir
-    // Electron'da doğrudan bir API yok, throttling uygulanabilir
   }
 }
 
-// Aktif görünümün boyutunu ayarla
 function resizeActiveView() {
   if (!mainWindow || !views[activeViewId]) return;
 
   // UI'daki content div'in koordinatlarını al
   mainWindow.webContents.executeJavaScript(`
     (function() {
-      const rect = document.querySelector('.webpage-content').getBoundingClientRect();
-      return {
-        x: rect.left,
-        y: rect.top,
-        width: rect.width,
-        height: rect.height
-      };
+      try {
+        // İlk olarak özel seçici ile dene
+        const element = document.querySelector('.webpage-content');
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          return {
+            x: rect.left,
+            y: rect.top,
+            width: rect.width,
+            height: rect.height
+          };
+        }
+
+        // Alternatif olarak content alanı olabilecek diğer elementleri dene
+        const alternativeElements = [
+          document.querySelector('.main-browser'),
+          document.querySelector('.browser-content'),
+          document.querySelector('[ref="contentRef"]'),
+          document.body
+        ];
+
+        for (const el of alternativeElements) {
+          if (el) {
+            const rect = el.getBoundingClientRect();
+            // Body ise ekranın üst kısmını hesaba kat
+            if (el === document.body) {
+              return {
+                x: 0,
+                y: 100, // Yaklaşık olarak üst çubuklar için alan bırak
+                width: rect.width,
+                height: rect.height - 100
+              };
+            }
+            return {
+              x: rect.left,
+              y: rect.top,
+              width: rect.width,
+              height: rect.height
+            };
+          }
+        }
+
+        // Hiçbir element bulunamazsa varsayılan değer kullan
+        return {
+          x: 0,
+          y: 100,
+          width: window.innerWidth,
+          height: window.innerHeight - 100
+        };
+      } catch (error) {
+        console.error('Boyut hesaplama hatası:', error);
+        // Hata durumunda güvenli bir değer döndür
+        return {
+          x: 0,
+          y: 100,
+          width: window.innerWidth,
+          height: window.innerHeight - 100
+        };
+      }
     })()
   `).then((bounds) => {
-    // BrowserView'i ayarla
-    views[activeViewId].setBounds(bounds);
+    if (bounds && bounds.width > 0 && bounds.height > 0) {
+      // BrowserView'i ayarla
+      views[activeViewId].setBounds(bounds);
+      console.log(`BrowserView yeniden boyutlandırıldı: ${JSON.stringify(bounds)}`);
+    } else {
+      console.error('Geçersiz boyutlar:', bounds);
+    }
   }).catch(err => {
     console.error('Görünüm boyutlandırma hatası:', err);
   });
 }
 
-// Yeni bir tarayıcı görünümü oluştur
 function createBrowserView(id, url) {
   if (views[id]) {
-    // Görünüm zaten mevcut, sadece göster
     showView(id);
     return;
   }
@@ -205,25 +237,18 @@ function createBrowserView(id, url) {
     }
   });
 
-  // Görünümü pencereye ekle
   mainWindow.addBrowserView(view);
   views[id] = view;
 
-  // Başlangıçta gizle, daha sonra düzgün boyutlandırılacak
   view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
 
-  // GX Sayfası mı kontrol et
   if (url === 'gx://corner') {
-    // GX Corner sayfasını göster
     loadGXCorner(view);
   } else if (url === 'gx://settings') {
-    // Ayarlar sayfasını göster
     loadGXSettings(view);
   } else if (url === 'gx://speed') {
-    // Hız sayfasını göster
     loadGXSpeedDial(view);
   } else if (url && url !== 'about:blank') {
-    // Normal URL
     view.webContents.loadURL(url).catch(err => {
       console.error(`URL yükleme hatası (${url}):`, err);
       view.webContents.loadURL(`data:text/html,
@@ -237,13 +262,10 @@ function createBrowserView(id, url) {
       `);
     });
   } else {
-    // Yeni sekme sayfası
     loadGXSpeedDial(view);
   }
 
-  // Harici bağlantıları tarayıcıda aç
   view.webContents.setWindowOpenHandler(({ url }) => {
-    // Bazı bağlantıları dış tarayıcıda açma seçeneği
     if (url.startsWith('mailto:') || url.startsWith('tel:')) {
       shell.openExternal(url);
       return { action: 'deny' };
@@ -251,18 +273,15 @@ function createBrowserView(id, url) {
     return { action: 'allow' };
   });
 
-  // Sayfa başlığı değiştiğinde olayı yakala
   view.webContents.on('page-title-updated', (event, title) => {
     mainWindow.webContents.send('page-title-updated', { id, title });
   });
 
-  // Sayfa yüklendiğinde olayı yakala
   view.webContents.on('did-finish-load', () => {
     const currentUrl = view.webContents.getURL();
     const title = view.webContents.getTitle();
     let favicon = '';
 
-    // Favicon'ı almaya çalış
     view.webContents.executeJavaScript(`
       (function() {
         const iconLink = document.querySelector('link[rel="icon"]') ||
@@ -289,25 +308,78 @@ function createBrowserView(id, url) {
     });
   });
 
-  // URL değiştiğinde olayı yakala
   view.webContents.on('did-navigate', (event, url) => {
+    console.log(`[did-navigate] Sekme ${id} için yeni URL: ${url}`);
     mainWindow.webContents.send('url-updated', { id, url });
   });
 
-  // URL veya alt kaynaklar değiştiğinde olayı yakala
-  view.webContents.on('did-navigate-in-page', (event, url) => {
-    mainWindow.webContents.send('url-updated', { id, url });
+  view.webContents.on('did-navigate-in-page', (event, url, isMainFrame) => {
+    if (isMainFrame) {
+      console.log(`[did-navigate-in-page] Sekme ${id} için yeni URL: ${url}`);
+      mainWindow.webContents.send('url-updated', { id, url });
+    }
   });
 
-  // Navigasyon durumu değiştiğinde olayı yakala (ileri-geri butonları için)
+  view.webContents.on('did-redirect-navigation', (event, url, isInPlace, isMainFrame) => {
+    if (isMainFrame) {
+      console.log(`[did-redirect-navigation] Sekme ${id} için yönlendirme: ${url}`);
+      mainWindow.webContents.send('url-updated', { id, url });
+    }
+  });
+
+  view.webContents.on('did-frame-navigate', (event, url, httpResponseCode, httpStatusText, isMainFrame) => {
+    if (isMainFrame) {
+      console.log(`[did-frame-navigate] Sekme ${id} için frame navigasyonu: ${url}`);
+      mainWindow.webContents.send('url-updated', { id, url });
+    }
+  });
+
+  view.webContents.on('did-start-loading', () => {
+    const currentUrl = view.webContents.getURL();
+    if (currentUrl) {
+      console.log(`[did-start-loading] Sekme ${id} için yükleme başlıyor: ${currentUrl}`);
+      mainWindow.webContents.send('url-updated', { id, url: currentUrl });
+    }
+  });
+
+  view.webContents.on('did-stop-loading', () => {
+    const currentUrl = view.webContents.getURL();
+    if (currentUrl) {
+      console.log(`[did-stop-loading] Sekme ${id} için yükleme tamamlandı: ${currentUrl}`);
+      mainWindow.webContents.send('url-updated', { id, url: currentUrl });
+    }
+  });
+
+  view.webContents.on('did-finish-load', () => {
+    const currentUrl = view.webContents.getURL();
+    if (currentUrl) {
+      console.log(`[did-finish-load] Sekme ${id} için yükleme tamamlandı: ${currentUrl}`);
+      mainWindow.webContents.send('url-updated', { id, url: currentUrl });
+    }
+  });
+
+  const checkUrlInterval = setInterval(() => {
+    if (!views[id] || !views[id].webContents) {
+      clearInterval(checkUrlInterval);
+      return;
+    }
+
+    const currentUrl = views[id].webContents.getURL();
+    if (currentUrl) {
+      mainWindow.webContents.send('url-updated', { id, url: currentUrl });
+    }
+  }, 1000);
+
+  view.webContents.on('destroyed', () => {
+    clearInterval(checkUrlInterval);
+  });
+
   updateNavigationState(id);
 
-  // Görünümü etkinleştir
   showView(id);
   return view;
 }
 
-// GX Corner (Oyun sayfası) yükle
 function loadGXCorner(view) {
   const gxCornerHTML = `
   <html>
@@ -478,7 +550,6 @@ function loadGXCorner(view) {
   view.webContents.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(gxCornerHTML)}`);
 }
 
-// GX Ayarlar sayfası
 function loadGXSettings(view) {
   const gxSettingsHTML = `
   <html>
@@ -722,7 +793,6 @@ function loadGXSettings(view) {
       </div>
 
       <script>
-        // Slider değerlerini güncelleyen işlevler
         document.getElementById('cpu-slider').addEventListener('input', function() {
           document.getElementById('cpu-value').textContent = this.value + '%';
         });
@@ -909,60 +979,60 @@ function loadGXSpeedDial(view) {
       <div class="logo">XİAVİON BROWSER</div>
 
       <div class="search-container">
-        <input type="text" class="search-box" placeholder="Google'da ara veya URL gir">
+        <input type="text" class="search-box" placeholder="Google'da ara veya URL gir" id="search-box">
       </div>
 
       <div class="shortcuts-container">
-        <div class="shortcut">
+        <div class="shortcut" data-url="https://www.google.com">
           <div class="shortcut-icon">
             <img src="https://www.google.com/favicon.ico" alt="Google">
           </div>
           <div class="shortcut-name">Google</div>
         </div>
 
-        <div class="shortcut">
+        <div class="shortcut" data-url="https://www.youtube.com">
           <div class="shortcut-icon">
             <img src="https://www.youtube.com/favicon.ico" alt="YouTube">
           </div>
           <div class="shortcut-name">YouTube</div>
         </div>
 
-        <div class="shortcut">
+        <div class="shortcut" data-url="https://www.twitch.tv">
           <div class="shortcut-icon">
             <img src="https://www.twitch.tv/favicon.ico" alt="Twitch">
           </div>
           <div class="shortcut-name">Twitch</div>
         </div>
 
-        <div class="shortcut">
+        <div class="shortcut" data-url="https://github.com">
           <div class="shortcut-icon">
             <img src="https://github.com/favicon.ico" alt="GitHub">
           </div>
           <div class="shortcut-name">GitHub</div>
         </div>
 
-        <div class="shortcut">
+        <div class="shortcut" data-url="https://www.reddit.com">
           <div class="shortcut-icon">
             <img src="https://www.reddit.com/favicon.ico" alt="Reddit">
           </div>
           <div class="shortcut-name">Reddit</div>
         </div>
 
-        <div class="shortcut">
+        <div class="shortcut" data-url="https://twitter.com">
           <div class="shortcut-icon">
             <img src="https://www.twitter.com/favicon.ico" alt="Twitter">
           </div>
           <div class="shortcut-name">Twitter</div>
         </div>
 
-        <div class="shortcut">
+        <div class="shortcut" data-url="https://discord.com">
           <div class="shortcut-icon">
             <img src="http://xiavion.com.tr/discord-icon-svgrepo-com.ico" alt="Discord">
           </div>
           <div class="shortcut-name">Discord</div>
         </div>
 
-        <div class="shortcut">
+        <div class="shortcut" data-url="https://www.netflix.com">
           <div class="shortcut-icon">
             <img src="https://www.netflix.com/favicon.ico" alt="Netflix">
           </div>
@@ -971,14 +1041,14 @@ function loadGXSpeedDial(view) {
       </div>
 
       <div class="tools">
-        <button class="tool-btn">
+        <button class="tool-btn" data-url="gx://corner">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"></path>
           </svg>
           GX Corner
         </button>
 
-        <button class="tool-btn">
+        <button class="tool-btn" data-url="gx://settings">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
@@ -986,7 +1056,7 @@ function loadGXSpeedDial(view) {
           Ayarlar
         </button>
 
-        <button class="tool-btn">
+        <button class="tool-btn" data-url="gx://speed">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
             <polyline points="22,6 12,13 2,6"></polyline>
@@ -1027,7 +1097,7 @@ function loadGXSpeedDial(view) {
         <div class="resource-monitor">
           <div class="monitor-title">Hızlı Araçlar</div>
 
-          <div class="tool-btn" style="width: 100%; margin-bottom: 10px; justify-content: center;">
+          <div class="tool-btn" style="width: 100%; margin-bottom: 10px; justify-content: center;" id="clear-cache-btn">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="3 6 5 6 21 6"></polyline>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -1035,7 +1105,7 @@ function loadGXSpeedDial(view) {
             Önbelleği Temizle
           </div>
 
-          <div class="tool-btn" style="width: 100%; margin-bottom: 10px; justify-content: center;">
+          <div class="tool-btn" style="width: 100%; margin-bottom: 10px; justify-content: center;" id="network-diag-btn">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10"></circle>
               <line x1="12" y1="8" x2="12" y2="12"></line>
@@ -1044,7 +1114,7 @@ function loadGXSpeedDial(view) {
             Ağ Teşhis
           </div>
 
-          <div class="tool-btn" style="width: 100%; justify-content: center;">
+          <div class="tool-btn" style="width: 100%; justify-content: center;" id="notifications-btn">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
@@ -1058,9 +1128,113 @@ function loadGXSpeedDial(view) {
   `;
 
   view.webContents.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(gxSpeedDialHTML)}`);
+
+  // Yükleme tamamlandığında, click olayları için ek script ekle
+  view.webContents.on('did-finish-load', () => {
+    view.webContents.executeJavaScript(`
+      // Kısayol tıklama işlevini kontrol et ve gerekirse yeniden ekle
+      if (!window.shortcutHandlersAdded) {
+        console.log('Speed Dial kısayol işleyicileri yükleniyor...');
+
+        // Kısayollara tıklama olayı
+        document.querySelectorAll('.shortcut').forEach(shortcut => {
+          shortcut.addEventListener('click', () => {
+            const url = shortcut.getAttribute('data-url');
+            if (url) {
+              console.log('Kısayol tıklandı:', url);
+              window.postMessage({ type: 'loadURL', url: url }, '*');
+            }
+          });
+        });
+
+        // Araç butonlarına tıklama olayı
+        document.querySelectorAll('.tool-btn').forEach(button => {
+          button.addEventListener('click', () => {
+            const url = button.getAttribute('data-url');
+            if (url) {
+              console.log('Araç butonu tıklandı:', url);
+              window.postMessage({ type: 'loadURL', url: url }, '*');
+            }
+          });
+        });
+
+        // Arama kutusu
+        const searchBox = document.getElementById('search-box');
+        if (searchBox) {
+          searchBox.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+              const searchValue = e.target.value.trim();
+              if (searchValue) {
+                let url = searchValue;
+
+                // URL formatını kontrol et
+                if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                  // Arama sorgusu mu URL mi kontrol et
+                  if (url.includes(' ') || !url.includes('.')) {
+                    // Arama sorgusu ise Google'da ara
+                    url = \`https://www.google.com/search?q=\${encodeURIComponent(url)}\`;
+                  } else {
+                    // URL ise https ekle
+                    url = \`https://\${url}\`;
+                  }
+                }
+
+                console.log('Arama yapıldı:', url);
+                window.postMessage({ type: 'loadURL', url: url }, '*');
+              }
+            }
+          });
+        }
+
+        // Hızlı araç butonları
+        const clearCacheBtn = document.getElementById('clear-cache-btn');
+        if (clearCacheBtn) {
+          clearCacheBtn.addEventListener('click', () => {
+            console.log('Önbelleği temizle tıklandı');
+            window.postMessage({ type: 'clearCache' }, '*');
+          });
+        }
+
+        const networkDiagBtn = document.getElementById('network-diag-btn');
+        if (networkDiagBtn) {
+          networkDiagBtn.addEventListener('click', () => {
+            console.log('Ağ teşhis tıklandı');
+            window.postMessage({ type: 'networkDiag' }, '*');
+          });
+        }
+
+        const notificationsBtn = document.getElementById('notifications-btn');
+        if (notificationsBtn) {
+          notificationsBtn.addEventListener('click', () => {
+            console.log('Bildirimler tıklandı');
+            window.postMessage({ type: 'notifications' }, '*');
+          });
+        }
+
+        window.shortcutHandlersAdded = true;
+        console.log('Speed Dial kısayol işleyicileri yüklendi.');
+      }
+    `).catch(err => {
+      console.error('Speed Dial script yükleme hatası:', err);
+    });
+  });
+
+  // WebContents olaylarını dinle (load-url vb)
+  view.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    console.log(`[Speed Dial Console] ${message}`);
+  });
+
+  // Direkt olarak açılan URL'leri işle
+  view.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith('data:')) {
+      // Kullanıcı bir siteye tıkladığında, yeni URL'yi yükle
+      console.log(`Speed Dial'dan yönlendirme: ${url}`);
+      event.preventDefault();
+      mainWindow.webContents.send('url-updated', { id: activeViewId, url });
+    }
+  });
 }
 
-// Navigasyon durumunu güncelle ve frontend'e bildir
 function updateNavigationState(id) {
   if (!views[id]) return;
 
@@ -1074,11 +1248,9 @@ function updateNavigationState(id) {
   });
 }
 
-// Belirli bir görünümü göster, diğerlerini gizle
 function showView(id) {
   if (!views[id] || !mainWindow) return;
 
-  // Mevcut aktif görünümü gizle
   if (activeViewId && views[activeViewId]) {
     views[activeViewId].setBounds({ x: 0, y: 0, width: 0, height: 0 });
   }
@@ -1086,11 +1258,9 @@ function showView(id) {
   activeViewId = id;
   resizeActiveView();
 
-  // Navigasyon durumunu güncelle
   updateNavigationState(id);
 }
 
-// Görünümü kapat
 function closeView(id) {
   if (!views[id] || !mainWindow) return;
 
@@ -1098,43 +1268,33 @@ function closeView(id) {
   views[id].webContents.destroy();
   delete views[id];
 
-  // Eğer kapatılan, aktif görünümse aktif ID'yi temizle
   if (activeViewId === id) {
     activeViewId = null;
   }
 }
 
-// Electron hazır olduğunda pencereyi oluştur
 app.whenReady().then(() => {
   createWindow();
-
-  // Uygulama başladığında adblock, cookie kontrolü gibi işlemleri başlat
   setupAdBlocker();
 });
 
-// Tüm pencereler kapandığında uygulamayı kapat (macOS hariç)
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
-// macOS'da uygulama ikonuna tıklandığında pencereyi yeniden oluştur
 app.on('activate', () => {
   if (mainWindow === null) {
     createWindow();
   }
 });
 
-// AdBlocker kurulumu
 function setupAdBlocker() {
-  // Basit reklam engelleme
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
-    // Reklam engelleyici etkinse
     if (resourceLimits.isLimiterEnabled) {
       const url = details.url.toLowerCase();
 
-      // Basit reklam URL filtreleri (gerçek uygulamada daha kapsamlı liste olmalı)
       const adFilters = [
         'googleads',
         'doubleclick.net',
@@ -1143,7 +1303,6 @@ function setupAdBlocker() {
         'analytics'
       ];
 
-      // URL'de reklam kalıpları var mı kontrol et
       const shouldBlock = adFilters.some(filter => url.includes(filter));
 
       if (shouldBlock) {
@@ -1158,7 +1317,39 @@ function setupAdBlocker() {
 
 // ================== IPC OLAYLARI ==================
 
-// Pencere kontrolü için IPC olayları
+ipcMain.handle('speed-dial-action', (event, { action, data }) => {
+  try {
+    console.log(`Speed Dial action: ${action}`, data);
+
+    if (action === 'loadURL' && data.id && data.url) {
+      if (views[data.id]) {
+        views[data.id].webContents.loadURL(data.url).catch(err => {
+          console.error(`URL yükleme hatası (${data.url}):`, err);
+        });
+        return { success: true, url: data.url };
+      } else {
+        return { success: false, error: 'Görünüm bulunamadı' };
+      }
+    } else if (action === 'clearCache') {
+      session.defaultSession.clearCache().then(() => {
+        console.log('Önbellek temizlendi');
+      });
+      return { success: true };
+    } else if (action === 'networkDiag') {
+      console.log('Ağ teşhisi başlatıldı');
+      return { success: true };
+    } else if (action === 'notifications') {
+      console.log('Bildirimler açıldı');
+      return { success: true };
+    }
+
+    return { success: false, error: 'Bilinmeyen eylem' };
+  } catch (error) {
+    console.error('Speed Dial action hatası:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('minimize-window', () => {
   mainWindow.minimize();
 });
@@ -1175,7 +1366,6 @@ ipcMain.handle('close-window', () => {
   mainWindow.close();
 });
 
-// Yeni tarayıcı görünümü oluştur
 ipcMain.handle('create-tab', (event, { id, url }) => {
   try {
     createBrowserView(id, url || 'about:blank');
@@ -1186,7 +1376,6 @@ ipcMain.handle('create-tab', (event, { id, url }) => {
   }
 });
 
-// Sekmeyi kapat
 ipcMain.handle('close-tab', (event, { id }) => {
   try {
     closeView(id);
@@ -1197,7 +1386,6 @@ ipcMain.handle('close-tab', (event, { id }) => {
   }
 });
 
-// Sekmeyi değiştir
 ipcMain.handle('switch-tab', (event, { id }) => {
   try {
     showView(id);
@@ -1208,13 +1396,11 @@ ipcMain.handle('switch-tab', (event, { id }) => {
   }
 });
 
-// URL yükle
 ipcMain.handle('load-url', (event, { id, url }) => {
   try {
     if (!views[id]) {
       createBrowserView(id, url);
     } else {
-      // GX özel sayfaları kontrol et
       if (url === 'gx://corner' || url === 'gx://settings' || url === 'gx://speed') {
         if (url === 'gx://corner') {
           loadGXCorner(views[id]);
@@ -1245,7 +1431,6 @@ ipcMain.handle('load-url', (event, { id, url }) => {
   }
 });
 
-// Tarayıcı navigasyon komutları
 ipcMain.handle('go-back', (event, { id }) => {
   try {
     if (views[id] && views[id].webContents.canGoBack()) {
@@ -1284,7 +1469,6 @@ ipcMain.handle('refresh', (event, { id }) => {
   }
 });
 
-// İçerik alanı boyutu değiştiğinde
 ipcMain.handle('content-bounds-updated', () => {
   try {
     if (activeViewId) {
@@ -1297,12 +1481,10 @@ ipcMain.handle('content-bounds-updated', () => {
   }
 });
 
-// Sistem kaynak sınırlarını güncelle
 ipcMain.handle('update-resource-limits', (event, limits) => {
   try {
     resourceLimits = { ...resourceLimits, ...limits };
 
-    // Sınırlamaları uygula
     if (resourceLimits.isLimiterEnabled) {
       applyResourceLimits();
     }
@@ -1313,10 +1495,8 @@ ipcMain.handle('update-resource-limits', (event, limits) => {
   }
 });
 
-// Reklam engelleyiciyi etkinleştir/devre dışı bırak
 ipcMain.handle('toggle-adblocker', (event, enabled) => {
   try {
-    // AdBlocker durumunu güncelle (basitleştirilmiş)
     const adBlockerEnabled = enabled;
     return { success: true, enabled: adBlockerEnabled };
   } catch (error) {
@@ -1324,7 +1504,6 @@ ipcMain.handle('toggle-adblocker', (event, enabled) => {
   }
 });
 
-// Önbelleği temizle
 ipcMain.handle('clear-cache', () => {
   try {
     session.defaultSession.clearCache().then(() => {
@@ -1336,7 +1515,6 @@ ipcMain.handle('clear-cache', () => {
   }
 });
 
-// Çerezleri temizle
 ipcMain.handle('clear-cookies', () => {
   try {
     session.defaultSession.clearStorageData({ storages: ['cookies'] }).then(() => {
