@@ -9,6 +9,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "format": "bunx @biomejs/biome check --apply src",
     "electron:dev": "concurrently -k \"bun run dev\" \"bun wait-on http://localhost:3000 && electron .\"",
     "electron:build": "next build && electron-builder build",
     "electron:package": "electron-builder build"

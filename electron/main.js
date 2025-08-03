@@ -135,8 +135,14 @@ function applyResourceLimits() {
   }
 }
 
+// Yeniden boyutlandırma döngüsünü önlemek için değişken ekleyelim
+let isResizing = false;
+let lastBounds = null;
+
 function resizeActiveView() {
-  if (!mainWindow || !views[activeViewId]) return;
+  if (!mainWindow || !views[activeViewId] || isResizing) return;
+
+  isResizing = true;
 
   // UI'daki content div'in koordinatlarını al
   mainWindow.webContents.executeJavaScript(`
@@ -203,14 +209,25 @@ function resizeActiveView() {
     })()
   `).then((bounds) => {
     if (bounds && bounds.width > 0 && bounds.height > 0) {
-      // BrowserView'i ayarla
-      views[activeViewId].setBounds(bounds);
-      console.log(`BrowserView yeniden boyutlandırıldı: ${JSON.stringify(bounds)}`);
+      // Aynı boyutlara tekrar tekrar ayarlamayı önle
+      const boundsStr = JSON.stringify(bounds);
+      if (lastBounds !== boundsStr) {
+        // BrowserView'i ayarla
+        views[activeViewId].setBounds(bounds);
+        console.log(`BrowserView yeniden boyutlandırıldı: ${boundsStr}`);
+        lastBounds = boundsStr;
+      }
     } else {
       console.error('Geçersiz boyutlar:', bounds);
     }
+
+    // İşlem bittiğinde kilidi kaldır
+    setTimeout(() => {
+      isResizing = false;
+    }, 100);
   }).catch(err => {
     console.error('Görünüm boyutlandırma hatası:', err);
+    isResizing = false;
   });
 }
 
@@ -241,6 +258,9 @@ function createBrowserView(id, url) {
   views[id] = view;
 
   view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+
+  // Yükleme işlemleri için bayrak değişkeni
+  let isInitialLoad = true;
 
   if (url === 'gx://corner') {
     loadGXCorner(view);
@@ -308,29 +328,46 @@ function createBrowserView(id, url) {
     });
   });
 
+  // URL değişikliklerini daha düzenli bir şekilde işleyelim
+  // Bir URL güncellemesi için son gönderim zamanını takip edelim
+  let lastUrlUpdateTime = 0;
+  let lastUrlReported = '';
+
+  const sendUrlUpdate = (url) => {
+    if (!url) return;
+
+    const now = Date.now();
+    // Aynı URL'yi kısa süre içinde tekrar göndermeyi önleyelim
+    if (url !== lastUrlReported || now - lastUrlUpdateTime > 500) {
+      lastUrlReported = url;
+      lastUrlUpdateTime = now;
+      mainWindow.webContents.send('url-updated', { id, url });
+    }
+  };
+
   view.webContents.on('did-navigate', (event, url) => {
     console.log(`[did-navigate] Sekme ${id} için yeni URL: ${url}`);
-    mainWindow.webContents.send('url-updated', { id, url });
+    sendUrlUpdate(url);
   });
 
   view.webContents.on('did-navigate-in-page', (event, url, isMainFrame) => {
     if (isMainFrame) {
       console.log(`[did-navigate-in-page] Sekme ${id} için yeni URL: ${url}`);
-      mainWindow.webContents.send('url-updated', { id, url });
+      sendUrlUpdate(url);
     }
   });
 
   view.webContents.on('did-redirect-navigation', (event, url, isInPlace, isMainFrame) => {
     if (isMainFrame) {
       console.log(`[did-redirect-navigation] Sekme ${id} için yönlendirme: ${url}`);
-      mainWindow.webContents.send('url-updated', { id, url });
+      sendUrlUpdate(url);
     }
   });
 
   view.webContents.on('did-frame-navigate', (event, url, httpResponseCode, httpStatusText, isMainFrame) => {
     if (isMainFrame) {
       console.log(`[did-frame-navigate] Sekme ${id} için frame navigasyonu: ${url}`);
-      mainWindow.webContents.send('url-updated', { id, url });
+      sendUrlUpdate(url);
     }
   });
 
@@ -338,7 +375,7 @@ function createBrowserView(id, url) {
     const currentUrl = view.webContents.getURL();
     if (currentUrl) {
       console.log(`[did-start-loading] Sekme ${id} için yükleme başlıyor: ${currentUrl}`);
-      mainWindow.webContents.send('url-updated', { id, url: currentUrl });
+      sendUrlUpdate(currentUrl);
     }
   });
 
@@ -346,7 +383,12 @@ function createBrowserView(id, url) {
     const currentUrl = view.webContents.getURL();
     if (currentUrl) {
       console.log(`[did-stop-loading] Sekme ${id} için yükleme tamamlandı: ${currentUrl}`);
-      mainWindow.webContents.send('url-updated', { id, url: currentUrl });
+      sendUrlUpdate(currentUrl);
+
+      // İlk yükleme işlemi bittiğinde, bayrak değişkenini sıfırla
+      if (isInitialLoad) {
+        isInitialLoad = false;
+      }
     }
   });
 
@@ -354,21 +396,25 @@ function createBrowserView(id, url) {
     const currentUrl = view.webContents.getURL();
     if (currentUrl) {
       console.log(`[did-finish-load] Sekme ${id} için yükleme tamamlandı: ${currentUrl}`);
-      mainWindow.webContents.send('url-updated', { id, url: currentUrl });
+      sendUrlUpdate(currentUrl);
     }
   });
 
+  // URL kontrol aralığını uzatalım ve daha akıllı hale getirelim
   const checkUrlInterval = setInterval(() => {
     if (!views[id] || !views[id].webContents) {
       clearInterval(checkUrlInterval);
       return;
     }
 
-    const currentUrl = views[id].webContents.getURL();
-    if (currentUrl) {
-      mainWindow.webContents.send('url-updated', { id, url: currentUrl });
+    // İlk yükleme tamamlandıysa, kontrol aralığını azaltalım
+    if (!isInitialLoad) {
+      const currentUrl = views[id].webContents.getURL();
+      if (currentUrl && currentUrl !== lastUrlReported) {
+        sendUrlUpdate(currentUrl);
+      }
     }
-  }, 1000);
+  }, 2000); // Daha uzun bir aralık kullanıyoruz
 
   view.webContents.on('destroyed', () => {
     clearInterval(checkUrlInterval);
@@ -1248,6 +1294,9 @@ function updateNavigationState(id) {
   });
 }
 
+// Yeniden boyutlandırma işlemi için gecikmeli çalışma değişkeni
+let resizeTimeoutId = null;
+
 function showView(id) {
   if (!views[id] || !mainWindow) return;
 
@@ -1256,7 +1305,28 @@ function showView(id) {
   }
 
   activeViewId = id;
-  resizeActiveView();
+
+  // Gecikmeli yeniden boyutlandırma
+  if (resizeTimeoutId) {
+    clearTimeout(resizeTimeoutId);
+  }
+
+  // Önce varsayılan bir boyut ver
+  const mainSize = mainWindow.getSize();
+  const bounds = {
+    x: 62,
+    y: 118,
+    width: mainSize[0] - 62,
+    height: mainSize[1] - 118
+  };
+
+  views[id].setBounds(bounds);
+
+  // Sonra daha kesin boyutlandırma için bekleme ekleyelim
+  resizeTimeoutId = setTimeout(() => {
+    resizeActiveView();
+    resizeTimeoutId = null;
+  }, 300);
 
   updateNavigationState(id);
 }
@@ -1469,10 +1539,18 @@ ipcMain.handle('refresh', (event, { id }) => {
   }
 });
 
+// Tekrarlanan istekleri engellemek için son istek zamanını takip edelim
+let lastContentBoundsUpdateTime = 0;
+
 ipcMain.handle('content-bounds-updated', () => {
   try {
     if (activeViewId) {
-      resizeActiveView();
+      const now = Date.now();
+      // İstekleri sınırla (200ms içinde yalnızca bir kez çalışsın)
+      if (now - lastContentBoundsUpdateTime > 200) {
+        lastContentBoundsUpdateTime = now;
+        resizeActiveView();
+      }
       return { success: true };
     }
     return { success: false };
