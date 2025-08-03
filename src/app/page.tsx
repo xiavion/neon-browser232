@@ -26,7 +26,13 @@ import {
   Gift,
   Volume2,
   VolumeX,
-  LayoutGrid
+  LayoutGrid,
+  Moon,
+  Sun,
+  User,
+  Lock,
+  Activity,
+  Bell
 } from "lucide-react"
 
 // Electron API tipi tanımı
@@ -54,6 +60,18 @@ interface ElectronAPI {
   toggleAdBlocker: (enabled: boolean) => Promise<{success: boolean, enabled: boolean, error?: string}>;
   clearCache: () => Promise<{success: boolean, error?: string}>;
   clearCookies: () => Promise<{success: boolean, error?: string}>;
+
+  // Tema ve görünüm
+  onThemeModeChanged: (callback: (data: {isDarkMode: boolean}) => void) => void;
+  toggleThemeMode: (isDarkMode: boolean) => void;
+  onNeonEffectsChanged: (callback: (data: {neonEffectsEnabled: boolean}) => void) => void;
+  toggleNeonEffects: (enabled: boolean) => void;
+  onPerformanceModeChanged: (callback: (data: {performanceMode: 'balanced' | 'performance' | 'quality'}) => void) => void;
+  setPerformanceMode: (mode: 'balanced' | 'performance' | 'quality') => void;
+  onProcessNextNotification: (callback: (data: {title: string, body: string}) => void) => void;
+  sendNotification: (data: {title: string, body: string, silent?: boolean}) => void;
+  onAutofillChanged?: (callback: (data: {autoFillEnabled: boolean}) => void) => void;
+  toggleAutofill?: (enabled: boolean) => void;
 
   // IPC event dinleyicileri
   onPageTitleUpdated: (callback: (data: {id: string, title: string}) => void) => void;
@@ -102,10 +120,18 @@ export default function Browser() {
   ]);
   const [activeTab, setActiveTab] = useState("1");
   const [url, setUrl] = useState("gx://speed");
+  const [lastSetUrl, setLastSetUrl] = useState("gx://speed"); // URL değişikliklerini izlemek için
+  const [isUrlBarFocused, setIsUrlBarFocused] = useState(false); // Adres çubuğu odak durumunu izle
   const contentRef = useRef<HTMLDivElement>(null);
   const [isElectron, setIsElectron] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [gxPanelOpen, setGxPanelOpen] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [neonEffectsEnabled, setNeonEffectsEnabled] = useState(true);
+  const [autoFillEnabled, setAutoFillEnabled] = useState(true);
+  const [performanceMode, setPerformanceMode] = useState<'balanced' | 'performance' | 'quality'>('balanced');
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<{title: string, body: string}[]>([]);
 
   // Sistem kaynakları
   const [systemResources, setSystemResources] = useState<SystemResources>({
@@ -124,6 +150,49 @@ export default function Browser() {
 
   // Electron API'yi global objeden al
   const electronAPI = typeof window !== "undefined" ? window.electronAPI : undefined
+
+  // Tema değişikliklerini dinle
+  useEffect(() => {
+    if (!electronAPI) return;
+
+    electronAPI.onThemeModeChanged((data) => {
+      setIsDarkMode(data.isDarkMode);
+
+      // Body sınıfını güncelle
+      if (typeof document !== 'undefined') {
+        document.body.className = data.isDarkMode ? 'dark-theme' : 'light-theme';
+      }
+    });
+
+    electronAPI.onNeonEffectsChanged((data) => {
+      setNeonEffectsEnabled(data.neonEffectsEnabled);
+
+      // Neon efektleri güncelle
+      if (typeof document !== 'undefined') {
+        document.documentElement.classList.toggle('neon-effects-on', data.neonEffectsEnabled);
+      }
+    });
+
+    electronAPI.onPerformanceModeChanged((data) => {
+      setPerformanceMode(data.performanceMode);
+    });
+
+    electronAPI.onProcessNextNotification((data) => {
+      if (data) {
+        handleShowNotification(data.title, data.body);
+      }
+    });
+
+    // Temayı başlangıçta ayarla
+    if (typeof document !== 'undefined') {
+      document.body.className = isDarkMode ? 'dark-theme' : 'light-theme';
+      document.documentElement.classList.toggle('neon-effects-on', neonEffectsEnabled);
+    }
+
+    return () => {
+      // Tema olay dinleyicilerini kaldır
+    };
+  }, [electronAPI]);
 
   // Sayfa başlığı güncellemesi
   useEffect(() => {
@@ -165,18 +234,38 @@ export default function Browser() {
     });
 
     electronAPI.onURLUpdated((data) => {
+      // URL güncelleme sıklığını azalt ve gereksiz güncellemeleri önle
+      const isInternalUrl = data.url && (
+        data.url.startsWith('gx://') ||
+        data.url.startsWith('about:') ||
+        data.url.startsWith('data:')
+      );
+
       setTabs(prevTabs => {
         return prevTabs.map(tab => {
           if (tab.id === data.id) {
+            // Dahili sayfalar için eğer aynı URL tipi ise güncelleme
+            if (isInternalUrl && tab.url && tab.url.startsWith(data.url.split('://')[0] + '://')) {
+              return tab;
+            }
             return { ...tab, url: data.url };
           }
           return tab;
         });
       });
 
-      // Aktif sekme için URL'yi güncelle
-      if (data.id === activeTab) {
-        setUrl(data.url);
+      // Aktif sekme için URL'yi güncelle (adres çubuğu odaktaysa güncelleme)
+      if (data.id === activeTab && !isUrlBarFocused) {
+        if (isInternalUrl) {
+          // Dahili sayfalar için sadece farklı bir sayfa ise güncelle
+          if (url.split('://')[0] !== data.url.split('://')[0]) {
+            setUrl(data.url);
+            setLastSetUrl(data.url);
+          }
+        } else {
+          setUrl(data.url);
+          setLastSetUrl(data.url);
+        }
       }
     });
 
@@ -438,12 +527,79 @@ export default function Browser() {
     }
   };
 
+  // Adres çubuğu odağı değiştiğinde
+  const handleUrlFocus = () => {
+    setIsUrlBarFocused(true);
+  };
+
+  const handleUrlBlur = () => {
+    setIsUrlBarFocused(false);
+
+    // Odak kaybolduğunda ve URL değiştirilmemişse, aktif sekme URL'sini geri yükle
+    const currentTab = tabs.find(tab => tab.id === activeTab);
+    if (currentTab && url !== currentTab.url && url === lastSetUrl) {
+      setUrl(currentTab.url);
+    }
+  };
+
+  // Bildirim gösterme
+  const handleShowNotification = (title: string, body: string) => {
+    if (!electronAPI) return;
+
+    electronAPI.sendNotification({
+      title,
+      body,
+      silent: false
+    });
+
+    // Bildirim listesini güncelle
+    setNotifications(prev => [...prev, { title, body }]);
+  };
+
+  // Tema modunu değiştir
+  const handleToggleThemeMode = () => {
+    if (!electronAPI) return;
+
+    const newMode = !isDarkMode;
+    setIsDarkMode(newMode);
+    electronAPI.toggleThemeMode(newMode);
+  };
+
+  // Neon efektlerini değiştir
+  const handleToggleNeonEffects = () => {
+    if (!electronAPI) return;
+
+    const newState = !neonEffectsEnabled;
+    setNeonEffectsEnabled(newState);
+    electronAPI.toggleNeonEffects(newState);
+  };
+
+  // Otomatik form doldurma değiştir
+  const handleToggleAutofill = () => {
+    if (!electronAPI) return;
+
+    const newState = !autoFillEnabled;
+    setAutoFillEnabled(newState);
+    electronAPI.toggleAutofill && electronAPI.toggleAutofill(newState);
+  };
+
+  // Performans modunu değiştir
+  const handleSetPerformanceMode = (mode: 'balanced' | 'performance' | 'quality') => {
+    if (!electronAPI) return;
+
+    setPerformanceMode(mode);
+    electronAPI.setPerformanceMode(mode);
+  };
+
   // GX Gösterge Paneli
   const GXPanel = () => (
-    <div className={`gx-panel ${gxPanelOpen ? 'open' : ''}`}>
+    <div className={`gx-panel ${gxPanelOpen ? 'open' : ''}`} style={{ pointerEvents: 'auto' }}>
       <div className="gx-panel-header">
         <h3>GX Kontrol Paneli</h3>
-        <button className="close-panel-btn" onClick={() => setGxPanelOpen(false)}>
+        <button className="close-panel-btn" onClick={(e) => {
+          e.stopPropagation(); // Olay kabarcıklanmasını durdur
+          setGxPanelOpen(false);
+        }}>
           <X size={18} />
         </button>
       </div>
@@ -516,6 +672,48 @@ export default function Browser() {
 
       <div className="gx-panel-section">
         <h4 className="gx-panel-section-title">
+          <Activity size={16} className="gx-panel-icon" />
+          Performans Modu
+        </h4>
+
+        <div className="performance-modes">
+          <div
+            className={`performance-mode-item ${performanceMode === 'performance' ? 'active' : ''}`}
+            onClick={() => handleSetPerformanceMode('performance')}
+          >
+            <Zap size={18} />
+            <div>
+              <div className="perf-mode-title">Performans</div>
+              <div className="perf-mode-desc">Daha az kaynak kullanımı, daha uzun pil ömrü</div>
+            </div>
+          </div>
+
+          <div
+            className={`performance-mode-item ${performanceMode === 'balanced' ? 'active' : ''}`}
+            onClick={() => handleSetPerformanceMode('balanced')}
+          >
+            <Activity size={18} />
+            <div>
+              <div className="perf-mode-title">Dengeli</div>
+              <div className="perf-mode-desc">Performans ve kalite arasında denge</div>
+            </div>
+          </div>
+
+          <div
+            className={`performance-mode-item ${performanceMode === 'quality' ? 'active' : ''}`}
+            onClick={() => handleSetPerformanceMode('quality')}
+          >
+            <HardDrive size={18} />
+            <div>
+              <div className="perf-mode-title">Kalite</div>
+              <div className="perf-mode-desc">En yüksek görsel kalite ve hız</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="gx-panel-section">
+        <h4 className="gx-panel-section-title">
           <Shield size={16} className="gx-panel-icon" />
           Gizlilik ve Güvenlik
         </h4>
@@ -533,6 +731,20 @@ export default function Browser() {
           </label>
         </div>
 
+        <div className="resource-toggle">
+          <label className="toggle-label">
+            <span>Otomatik Form Doldurma</span>
+            <div className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={autoFillEnabled}
+                onChange={() => handleToggleAutofill()}
+              />
+              <span className="toggle-slider"></span>
+            </div>
+          </label>
+        </div>
+
         <div className="gx-panel-buttons">
           <button className="gx-panel-button" onClick={handleClearCache}>
             <Zap size={14} />
@@ -543,6 +755,47 @@ export default function Browser() {
             <X size={14} />
             Çerezleri Temizle
           </button>
+        </div>
+      </div>
+
+      <div className="gx-panel-section">
+        <h4 className="gx-panel-section-title">
+          <User size={16} className="gx-panel-icon" />
+          Görünüm Ayarları
+        </h4>
+
+        <div className="resource-toggle">
+          <label className="toggle-label">
+            <span>Karanlık Mod</span>
+            <div className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={isDarkMode}
+                onChange={handleToggleThemeMode}
+              />
+              <span className="toggle-slider"></span>
+            </div>
+          </label>
+        </div>
+
+        <div className="resource-toggle">
+          <label className="toggle-label">
+            <span>Neon Efektleri</span>
+            <div className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={neonEffectsEnabled}
+                onChange={handleToggleNeonEffects}
+              />
+              <span className="toggle-slider"></span>
+            </div>
+          </label>
+        </div>
+
+        <div className="theme-preview">
+          <div className={`theme-box ${isDarkMode ? 'dark' : 'light'} ${neonEffectsEnabled ? 'neon-on' : ''}`}>
+            <div className="theme-sample-text">Neon Browser</div>
+          </div>
         </div>
       </div>
 
@@ -594,6 +847,36 @@ export default function Browser() {
           </div>
         </div>
       </div>
+
+      <div className="gx-panel-section">
+        <h4 className="gx-panel-section-title">
+          <Bell size={16} className="gx-panel-icon" />
+          Bildirimler
+        </h4>
+
+        <div className="notification-list">
+          {notifications.length === 0 ? (
+            <div className="no-notifications">Henüz bildirim yok</div>
+          ) : (
+            notifications.map((notification, index) => (
+              <div key={index} className="notification-item">
+                <div className="notification-title">{notification.title}</div>
+                <div className="notification-body">{notification.body}</div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="gx-panel-buttons">
+          <button
+            className="gx-panel-button"
+            onClick={() => handleShowNotification("Test Bildirimi", "Bu bir test bildirimidir!")}
+          >
+            <Bell size={14} />
+            Test Bildirimi Gönder
+          </button>
+        </div>
+      </div>
     </div>
   );
 
@@ -633,7 +916,10 @@ export default function Browser() {
 
           <button
             className={`sidebar-btn gx-toggle ${gxPanelOpen ? 'active' : ''}`}
-            onClick={() => setGxPanelOpen(!gxPanelOpen)}
+            onClick={(e) => {
+              e.stopPropagation(); // Olay kabarcıklanmasını durdur
+              setGxPanelOpen(!gxPanelOpen);
+            }}
           >
             <Zap size={20} />
           </button>
@@ -711,6 +997,8 @@ export default function Browser() {
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 onKeyDown={handleKeyDown}
+                onFocus={handleUrlFocus}
+                onBlur={handleUrlBlur}
                 placeholder="Search or enter website name"
               />
             </div>
@@ -721,7 +1009,10 @@ export default function Browser() {
               </button>
               <button
                 className={`action-btn ${gxPanelOpen ? 'active' : ''}`}
-                onClick={() => setGxPanelOpen(!gxPanelOpen)}
+                onClick={(e) => {
+                  e.stopPropagation(); // Olay kabarcıklanmasını durdur
+                  setGxPanelOpen(!gxPanelOpen);
+                }}
               >
                 <Zap size={18} />
               </button>

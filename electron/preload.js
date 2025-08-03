@@ -27,6 +27,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
   clearCache: () => ipcRenderer.invoke('clear-cache'),
   clearCookies: () => ipcRenderer.invoke('clear-cookies'),
 
+  // Yeni Eklenen Özellikler
+
+  // Tema modu ve neon efektleri
+  toggleThemeMode: (dark) => ipcRenderer.invoke('toggle-theme-mode', dark),
+  toggleNeonEffects: (enabled) => ipcRenderer.invoke('toggle-neon-effects', enabled),
+
+  // Form doldurma özellikleri
+  toggleAutofill: (enabled) => ipcRenderer.invoke('toggle-autofill', enabled),
+  saveFormData: (data) => ipcRenderer.invoke('save-form-data', data),
+  clearFormData: () => ipcRenderer.invoke('clear-form-data'),
+
+  // Performans modunu ayarlama
+  setPerformanceMode: (mode) => ipcRenderer.invoke('set-performance-mode', mode),
+
+  // Bildirim sistemi
+  sendNotification: (options) => ipcRenderer.invoke('send-notification', options),
+
   // IPC Event Dinleyicileri
   onPageTitleUpdated: (callback) => {
     ipcRenderer.on('page-title-updated', (_, data) => callback(data));
@@ -44,6 +61,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('system-resources-updated', (_, data) => callback(data));
   },
 
+  // Tema ve performans için olay dinleyicileri
+  onThemeModeChanged: (callback) => {
+    ipcRenderer.on('theme-mode-changed', (_, data) => callback(data));
+  },
+  onNeonEffectsChanged: (callback) => {
+    ipcRenderer.on('neon-effects-changed', (_, data) => callback(data));
+  },
+  onPerformanceModeChanged: (callback) => {
+    ipcRenderer.on('performance-mode-changed', (_, data) => callback(data));
+  },
+  onProcessNextNotification: (callback) => {
+    ipcRenderer.on('process-next-notification', (_, data) => callback(data));
+  },
+
   // Dinleyicileri kaldırma
   removeAllListeners: () => {
     ipcRenderer.removeAllListeners('page-title-updated');
@@ -51,6 +82,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners('url-updated');
     ipcRenderer.removeAllListeners('navigation-state-updated');
     ipcRenderer.removeAllListeners('system-resources-updated');
+    ipcRenderer.removeAllListeners('theme-mode-changed');
+    ipcRenderer.removeAllListeners('neon-effects-changed');
+    ipcRenderer.removeAllListeners('performance-mode-changed');
+    ipcRenderer.removeAllListeners('process-next-notification');
   }
 });
 
